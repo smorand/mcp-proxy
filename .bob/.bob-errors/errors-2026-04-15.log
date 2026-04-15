@@ -1,0 +1,455 @@
+
+================================================================================
+ERROR LOGGED: 2026-04-15T18:49:10.600Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T18:49:10.608Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T18:58:19.492Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T18:58:19.493Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T19:29:53.793Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T19:29:53.796Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T19:38:30.585Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T19:38:30.604Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T19:38:55.106Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T19:38:55.111Z
+User ID: seb.morand@gmail.com
+================================================================================
+Error Name: Error
+Error Message: Missing authorization code
+
+Stack Trace:
+Error: Missing authorization code
+    at Server.<anonymous> (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:2107:209)
+    at Server.emit (node:events:509:20)
+    at parserOnIncoming (node:_http_server:1216:12)
+    at HTTPParser.parserOnHeadersComplete (node:_http_common:125:17)
+================================================================================
+
+
+================================================================================
+ERROR LOGGED: 2026-04-15T20:51:50.683Z
+================================================================================
+Error Name: Error
+Error Message: Connection failed for 'notes': [
+  {
+    "code": "invalid_union",
+    "errors": [
+      [
+        {
+          "code": "invalid_union",
+          "errors": [
+            [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected string, received null"
+              }
+            ],
+            [
+              {
+                "expected": "number",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected number, received null"
+              }
+            ]
+          ],
+          "path": [
+            "id"
+          ],
+          "message": "Invalid input"
+        },
+        {
+          "expected": "string",
+          "code": "invalid_type",
+          "path": [
+            "method"
+          ],
+          "message": "Invalid input: expected string, received undefined"
+        },
+        {
+          "code": "unrecognized_keys",
+          "keys": [
+            "error"
+          ],
+          "path": [],
+          "message": "Unrecognized key: \"error\""
+        }
+      ],
+      [
+        {
+          "expected": "string",
+          "code": "invalid_type",
+          "path": [
+            "method"
+          ],
+          "message": "Invalid input: expected string, received undefined"
+        },
+        {
+          "code": "unrecognized_keys",
+          "keys": [
+            "id",
+            "error"
+          ],
+          "path": [],
+          "message": "Unrecognized keys: \"id\", \"error\""
+        }
+      ],
+      [
+        {
+          "code": "invalid_union",
+          "errors": [
+            [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected string, received null"
+              }
+            ],
+            [
+              {
+                "expected": "number",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected number, received null"
+              }
+            ]
+          ],
+          "path": [
+            "id"
+          ],
+          "message": "Invalid input"
+        },
+        {
+          "expected": "object",
+          "code": "invalid_type",
+          "path": [
+            "result"
+          ],
+          "message": "Invalid input: expected object, received undefined"
+        },
+        {
+          "code": "unrecognized_keys",
+          "keys": [
+            "error"
+          ],
+          "path": [],
+          "message": "Unrecognized key: \"error\""
+        }
+      ],
+      [
+        {
+          "code": "invalid_union",
+          "errors": [
+            [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected string, received null"
+              }
+            ],
+            [
+              {
+                "expected": "number",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected number, received null"
+              }
+            ]
+          ],
+          "path": [
+            "id"
+          ],
+          "message": "Invalid input"
+        }
+      ]
+    ],
+    "path": [],
+    "message": "Invalid input"
+  }
+]
+
+Stack Trace:
+Error: Connection failed for 'notes': [
+  {
+    "code": "invalid_union",
+    "errors": [
+      [
+        {
+          "code": "invalid_union",
+          "errors": [
+            [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected string, received null"
+              }
+            ],
+            [
+              {
+                "expected": "number",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected number, received null"
+              }
+            ]
+          ],
+          "path": [
+            "id"
+          ],
+          "message": "Invalid input"
+        },
+        {
+          "expected": "string",
+          "code": "invalid_type",
+          "path": [
+            "method"
+          ],
+          "message": "Invalid input: expected string, received undefined"
+        },
+        {
+          "code": "unrecognized_keys",
+          "keys": [
+            "error"
+          ],
+          "path": [],
+          "message": "Unrecognized key: \"error\""
+        }
+      ],
+      [
+        {
+          "expected": "string",
+          "code": "invalid_type",
+          "path": [
+            "method"
+          ],
+          "message": "Invalid input: expected string, received undefined"
+        },
+        {
+          "code": "unrecognized_keys",
+          "keys": [
+            "id",
+            "error"
+          ],
+          "path": [],
+          "message": "Unrecognized keys: \"id\", \"error\""
+        }
+      ],
+      [
+        {
+          "code": "invalid_union",
+          "errors": [
+            [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected string, received null"
+              }
+            ],
+            [
+              {
+                "expected": "number",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected number, received null"
+              }
+            ]
+          ],
+          "path": [
+            "id"
+          ],
+          "message": "Invalid input"
+        },
+        {
+          "expected": "object",
+          "code": "invalid_type",
+          "path": [
+            "result"
+          ],
+          "message": "Invalid input: expected object, received undefined"
+        },
+        {
+          "code": "unrecognized_keys",
+          "keys": [
+            "error"
+          ],
+          "path": [],
+          "message": "Unrecognized key: \"error\""
+        }
+      ],
+      [
+        {
+          "code": "invalid_union",
+          "errors": [
+            [
+              {
+                "expected": "string",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected string, received null"
+              }
+            ],
+            [
+              {
+                "expected": "number",
+                "code": "invalid_type",
+                "path": [],
+                "message": "Invalid input: expected number, received null"
+              }
+            ]
+          ],
+          "path": [
+            "id"
+          ],
+          "message": "Invalid input"
+        }
+      ]
+    ],
+    "path": [],
+    "message": "Invalid input"
+  }
+]
+    at qlr (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:3502:10291)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async txe.connect (file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:3502:13137)
+    at async file:///opt/homebrew/lib/node_modules/bobshell/bundle/bob.js:3502:17293
+================================================================================
+

@@ -7,6 +7,7 @@ A command-line tool that acts as an authentication proxy for MCP (Model Context 
 - **OAuth2.1 with PKCE**: Secure authentication flow with Proof Key for Code Exchange
 - **Automatic OAuth discovery**: Discovers OAuth endpoints via .well-known mechanism
 - **Browser-based authentication**: Opens system browser for user authentication
+- **Automatic token refresh**: Seamlessly refreshes expired tokens using refresh_token
 - **Automatic token management**: Caches tokens and handles expiration
 - **Secure token storage**: Tokens stored locally with proper file permissions (0600)
 - **HTTPS enforcement**: Only allows secure HTTPS connections to MCP servers
@@ -45,13 +46,14 @@ mcp-proxy -u https://mcp.example.com
 This will:
 1. Read OAuth credentials from environment variables (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
 2. Check for cached tokens in `~/.cache/mcp-proxy/`
-3. If no valid token exists:
+3. If a cached token exists but is expired, automatically refresh it using the stored refresh_token
+4. If refresh fails or no valid token exists:
    - Discover OAuth endpoints via .well-known mechanism
    - Generate PKCE codes for secure authentication
    - Open your browser for authentication
    - Exchange authorization code for access token
    - Cache the token for future use
-4. (In future versions) Proxy MCP requests using the access token
+5. (In future versions) Proxy MCP requests using the access token
 
 ### Custom Credentials
 
@@ -151,7 +153,7 @@ Check that your URL is well-formed. It should be a complete URL like `https://mc
 
 ## Project Status
 
-**Current Version**: US-002 (OAuth2.1 Flow with PKCE)
+**Current Version**: US-003 (Token Refresh & Expiration)
 
 Completed features:
 - ✅ CLI argument parsing with environment variable support (US-001)
@@ -161,7 +163,9 @@ Completed features:
 - ✅ PKCE code generation with SHA256 (US-002)
 - ✅ Browser-based authentication flow (US-002)
 - ✅ Token exchange and caching (US-002)
-- ⏳ Token refresh on expiration (coming in US-003)
+- ✅ Token expiration detection (US-003)
+- ✅ Automatic token refresh via refresh_token (US-003)
+- ✅ Fallback to full OAuth when refresh fails (US-003)
 - ⏳ MCP server proxy with stdio interface (coming in US-004)
 
 ## License

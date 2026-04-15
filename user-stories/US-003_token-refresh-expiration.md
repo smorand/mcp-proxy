@@ -1,7 +1,7 @@
 # US-003: Token Refresh & Expiration
 
 > Parent Spec: specs/2026-04-15_22:30:35-mcp-proxy.md
-> Status: ready
+> Status: done
 > Priority: 3
 > Depends On: US-001, US-002
 > Complexity: M

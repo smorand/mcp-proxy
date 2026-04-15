@@ -36,7 +36,10 @@ mcp-proxy/
 ├── main.go                    # Entry point with OAuth flow
 ├── internal/
 │   ├── config/               # CLI parsing & validation
-│   ├── token/                # Token file I/O
+│   ├── token/                # Token file I/O, expiration & refresh
+│   │   ├── storage.go        # Token persistence (atomic writes)
+│   │   ├── expiration.go     # Expiration detection
+│   │   └── refresh.go        # Token refresh via refresh_token
 │   ├── oauth/                # OAuth2.1 flow components
 │   │   ├── pkce.go          # PKCE code generation
 │   │   ├── discovery.go     # .well-known endpoint discovery
@@ -87,7 +90,7 @@ mcp-proxy/
 
 ## Current Status
 
-**Implemented:** US-001 (Foundation) + US-002 (OAuth2.1 Flow)
+**Implemented:** US-001 (Foundation) + US-002 (OAuth2.1 Flow) + US-003 (Token Refresh)
 - ✅ CLI argument parsing
 - ✅ Token file management
 - ✅ Error handling framework
@@ -96,5 +99,8 @@ mcp-proxy/
 - ✅ HTTP callback server (ports 3000-3010)
 - ✅ Browser integration (macOS/Linux/Windows)
 - ✅ Token exchange and caching
+- ✅ Token expiration detection
+- ✅ Automatic token refresh via refresh_token
+- ✅ Fallback to full OAuth when refresh fails (400/401)
 
-**Next:** US-003 (Token Refresh on Expiration)
+**Next:** US-004 (MCP Proxy Streaming)

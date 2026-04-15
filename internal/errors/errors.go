@@ -7,12 +7,12 @@ import (
 
 // Exit codes as defined in FR-006
 const (
-	ExitSuccess          = 0
-	ExitConfigError      = 1
-	ExitAuthError        = 2
-	ExitNetworkError     = 3
-	ExitFileSystemError  = 4
-	ExitTokenError       = 5
+	ExitSuccess         = 0
+	ExitConfigError     = 1
+	ExitAuthError       = 2
+	ExitNetworkError    = 3
+	ExitFileSystemError = 4
+	ExitTokenError      = 5
 )
 
 // AppError represents an application error with an exit code

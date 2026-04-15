@@ -5,10 +5,13 @@ A command-line tool that acts as an authentication proxy for MCP (Model Context 
 ## Features
 
 - **OAuth2.1 with PKCE**: Secure authentication flow with Proof Key for Code Exchange
-- **Automatic token management**: Handles token refresh and re-authentication automatically
+- **Automatic OAuth discovery**: Discovers OAuth endpoints via .well-known mechanism
+- **Browser-based authentication**: Opens system browser for user authentication
+- **Automatic token management**: Caches tokens and handles expiration
 - **Secure token storage**: Tokens stored locally with proper file permissions (0600)
 - **HTTPS enforcement**: Only allows secure HTTPS connections to MCP servers
 - **Environment variable support**: Configure credentials via environment variables
+- **Cross-platform**: Supports macOS, Linux, and Windows
 
 ## Prerequisites
 
@@ -41,8 +44,14 @@ mcp-proxy -u https://mcp.example.com
 
 This will:
 1. Read OAuth credentials from environment variables (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
-2. Validate the configuration
-3. (In future versions) Start the OAuth flow and proxy MCP requests
+2. Check for cached tokens in `~/.cache/mcp-proxy/`
+3. If no valid token exists:
+   - Discover OAuth endpoints via .well-known mechanism
+   - Generate PKCE codes for secure authentication
+   - Open your browser for authentication
+   - Exchange authorization code for access token
+   - Cache the token for future use
+4. (In future versions) Proxy MCP requests using the access token
 
 ### Custom Credentials
 
@@ -142,15 +151,18 @@ Check that your URL is well-formed. It should be a complete URL like `https://mc
 
 ## Project Status
 
-**Current Version**: US-001 (Foundation)
+**Current Version**: US-002 (OAuth2.1 Flow with PKCE)
 
-This is the foundational release that includes:
-- ✅ CLI argument parsing with environment variable support
-- ✅ Secure token file management
-- ✅ Error handling framework
-- ⏳ OAuth2.1 flow (coming in US-002)
-- ⏳ Token refresh (coming in US-003)
-- ⏳ MCP server proxy (coming in US-004)
+Completed features:
+- ✅ CLI argument parsing with environment variable support (US-001)
+- ✅ Secure token file management (US-001)
+- ✅ Error handling framework (US-001)
+- ✅ OAuth2.1 discovery via .well-known endpoints (US-002)
+- ✅ PKCE code generation with SHA256 (US-002)
+- ✅ Browser-based authentication flow (US-002)
+- ✅ Token exchange and caching (US-002)
+- ⏳ Token refresh on expiration (coming in US-003)
+- ⏳ MCP server proxy with stdio interface (coming in US-004)
 
 ## License
 

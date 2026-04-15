@@ -33,10 +33,16 @@ make clean
 
 ```
 mcp-proxy/
-├── main.go                    # Entry point
+├── main.go                    # Entry point with OAuth flow
 ├── internal/
 │   ├── config/               # CLI parsing & validation
 │   ├── token/                # Token file I/O
+│   ├── oauth/                # OAuth2.1 flow components
+│   │   ├── pkce.go          # PKCE code generation
+│   │   ├── discovery.go     # .well-known endpoint discovery
+│   │   ├── callback.go      # HTTP callback server
+│   │   ├── browser.go       # Browser integration
+│   │   └── exchange.go      # Token exchange
 │   └── errors/               # Error types & exit codes
 ├── tests/                    # E2E tests
 ├── user-stories/             # Implementation backlog
@@ -81,9 +87,14 @@ mcp-proxy/
 
 ## Current Status
 
-**Implemented:** US-001 (Foundation)
+**Implemented:** US-001 (Foundation) + US-002 (OAuth2.1 Flow)
 - ✅ CLI argument parsing
 - ✅ Token file management
 - ✅ Error handling framework
+- ✅ OAuth2.1 discovery via .well-known
+- ✅ PKCE code generation (SHA256)
+- ✅ HTTP callback server (ports 3000-3010)
+- ✅ Browser integration (macOS/Linux/Windows)
+- ✅ Token exchange and caching
 
-**Next:** US-002 (OAuth2.1 Flow with PKCE)
+**Next:** US-003 (Token Refresh on Expiration)

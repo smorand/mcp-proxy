@@ -63,7 +63,7 @@ func (s *Storage) Save(serverURL string, accessToken string, refreshToken string
 
 	// Write atomically: write to temp file, then rename
 	tempFile := filename + ".tmp"
-	
+
 	// Write to temp file with 0600 permissions
 	if err := os.WriteFile(tempFile, data, 0600); err != nil {
 		return errors.NewFileSystemError(
@@ -152,11 +152,11 @@ func (s *Storage) ensureCacheDir() error {
 func (s *Storage) getTokenFilePath(serverURL string) string {
 	// Base64url encode the URL (RFC 4648, URL-safe alphabet, no padding)
 	encoded := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString([]byte(serverURL))
-	
+
 	// Replace any remaining problematic characters
 	encoded = strings.ReplaceAll(encoded, "/", "_")
 	encoded = strings.ReplaceAll(encoded, "+", "-")
-	
+
 	filename := encoded + ".json"
 	return filepath.Join(s.cacheDir, filename)
 }

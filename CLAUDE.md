@@ -2,11 +2,13 @@
 
 ## Project Overview
 
-**mcp-proxy** is a Go-based CLI tool that acts as an authentication proxy for MCP (Model Context Protocol) servers. It handles OAuth2.1 authentication with PKCE, automatic token refresh, and secure token storage.
+**mcp-proxy** is a Go-based CLI tool that acts as an authentication proxy for MCP (Model Context Protocol) servers. It exposes a local stdio interface, forwarding JSON-RPC messages to remote MCP servers via streamable HTTP with OAuth2.1 authentication, automatic token refresh, and JSONL tracing.
 
 **Tech Stack:**
 - Language: Go 1.21+
 - CLI: Standard library `flag` package
+- HTTP: Standard library `net/http` with streaming
+- Tracing: Custom JSONL exporter (no external SDK)
 - Testing: Go testing framework with table-driven tests
 - Build: Makefile
 
@@ -33,7 +35,7 @@ make clean
 
 ```
 mcp-proxy/
-├── main.go                    # Entry point with OAuth flow
+├── main.go                    # Entry point, token acquisition, proxy startup
 ├── internal/
 │   ├── config/               # CLI parsing & validation
 │   ├── token/                # Token file I/O, expiration & refresh
@@ -46,6 +48,13 @@ mcp-proxy/
 │   │   ├── callback.go      # HTTP callback server
 │   │   ├── browser.go       # Browser integration
 │   │   └── exchange.go      # Token exchange
+│   ├── proxy/                # MCP proxy (stdio <-> HTTP)
+│   │   ├── stdio.go         # stdin/stdout JSON-RPC scanning
+│   │   ├── http.go          # HTTP client with Bearer auth
+│   │   └── handler.go       # Proxy orchestration, 401 retry
+│   ├── telemetry/            # JSONL tracing (no external SDK)
+│   │   ├── tracer.go        # Span creation & lifecycle
+│   │   └── exporter.go      # File-based JSONL exporter
 │   └── errors/               # Error types & exit codes
 ├── tests/                    # E2E tests
 ├── user-stories/             # Implementation backlog
@@ -90,7 +99,7 @@ mcp-proxy/
 
 ## Current Status
 
-**Implemented:** US-001 (Foundation) + US-002 (OAuth2.1 Flow) + US-003 (Token Refresh)
+**Implemented:** US-001 (Foundation) + US-002 (OAuth2.1 Flow) + US-003 (Token Refresh) + US-004 (MCP Proxy Streaming)
 - ✅ CLI argument parsing
 - ✅ Token file management
 - ✅ Error handling framework
@@ -102,5 +111,7 @@ mcp-proxy/
 - ✅ Token expiration detection
 - ✅ Automatic token refresh via refresh_token
 - ✅ Fallback to full OAuth when refresh fails (400/401)
-
-**Next:** US-004 (MCP Proxy Streaming)
+- ✅ stdio proxy: read JSON-RPC from stdin, forward via HTTP, write to stdout
+- ✅ 401 handling: auto-refresh token and retry once
+- ✅ OpenTelemetry JSONL tracing at `~/.cache/mcp-proxy/traces.jsonl`
+- ✅ Graceful shutdown on SIGINT/SIGTERM

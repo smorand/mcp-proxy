@@ -1,7 +1,7 @@
 # US-004: MCP Server Proxy & Streaming
 
 > Parent Spec: specs/2026-04-15_22:30:35-mcp-proxy.md
-> Status: ready
+> Status: done
 > Priority: 4
 > Depends On: US-001, US-003
 > Complexity: M

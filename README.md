@@ -4,13 +4,16 @@ A command-line tool that acts as an authentication proxy for MCP (Model Context 
 
 ## Features
 
+- **stdio proxy**: Exposes a local stdio interface, forwarding JSON-RPC messages to remote MCP servers via streamable HTTP
 - **OAuth2.1 with PKCE**: Secure authentication flow with Proof Key for Code Exchange
 - **Automatic OAuth discovery**: Discovers OAuth endpoints via .well-known mechanism
 - **Browser-based authentication**: Opens system browser for user authentication
-- **Automatic token refresh**: Seamlessly refreshes expired tokens using refresh_token
+- **Automatic token refresh**: Seamlessly refreshes expired tokens using refresh_token, including on 401 responses from the MCP server
 - **Automatic token management**: Caches tokens and handles expiration
 - **Secure token storage**: Tokens stored locally with proper file permissions (0600)
 - **HTTPS enforcement**: Only allows secure HTTPS connections to MCP servers
+- **OpenTelemetry tracing**: JSONL trace output at `~/.cache/mcp-proxy/traces.jsonl`
+- **Graceful shutdown**: Handles SIGINT/SIGTERM for clean process termination
 - **Environment variable support**: Configure credentials via environment variables
 - **Cross-platform**: Supports macOS, Linux, and Windows
 
@@ -53,7 +56,8 @@ This will:
    - Open your browser for authentication
    - Exchange authorization code for access token
    - Cache the token for future use
-5. (In future versions) Proxy MCP requests using the access token
+5. Start the stdio proxy: read JSON-RPC messages from stdin, forward to the MCP server with Bearer auth, write responses to stdout
+6. If the MCP server returns 401, automatically refresh the token and retry the request
 
 ### Custom Credentials
 
@@ -89,12 +93,31 @@ mcp-proxy -u https://mcp.example.com -i env:MY_CLIENT_ID -s env:MY_SECRET
 - `--client-id`, `-i`: OAuth2.1 client ID (default: `env:GOOGLE_CLIENT_ID`)
 - `--client-secret`, `-s`: OAuth2.1 client secret (default: `env:GOOGLE_CLIENT_SECRET`)
 
+### Claude Desktop Integration
+
+Add to your Claude Desktop MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "mcp-proxy",
+      "args": ["-u", "https://mcp.example.com"]
+    }
+  }
+}
+```
+
 ### Token Storage
 
 Tokens are stored in `~/.cache/mcp-proxy/` with the following security measures:
 - Directory permissions: 0700 (owner read/write/execute only)
 - File permissions: 0600 (owner read/write only)
 - Filenames are base64url-encoded server URLs
+
+### Trace Output
+
+OpenTelemetry traces are written in JSONL format to `~/.cache/mcp-proxy/traces.jsonl` (permissions 0600). Traces include HTTP request metadata and OAuth flow steps but never contain sensitive data (tokens, secrets).
 
 ## Development
 
@@ -153,7 +176,7 @@ Check that your URL is well-formed. It should be a complete URL like `https://mc
 
 ## Project Status
 
-**Current Version**: US-003 (Token Refresh & Expiration)
+**Current Version**: US-004 (MCP Proxy Streaming)
 
 Completed features:
 - ✅ CLI argument parsing with environment variable support (US-001)
@@ -166,7 +189,10 @@ Completed features:
 - ✅ Token expiration detection (US-003)
 - ✅ Automatic token refresh via refresh_token (US-003)
 - ✅ Fallback to full OAuth when refresh fails (US-003)
-- ⏳ MCP server proxy with stdio interface (coming in US-004)
+- ✅ stdio proxy with JSON-RPC forwarding via HTTP (US-004)
+- ✅ 401 handling with automatic token refresh and retry (US-004)
+- ✅ OpenTelemetry JSONL tracing (US-004)
+- ✅ Graceful SIGINT/SIGTERM shutdown (US-004)
 
 ## License
 

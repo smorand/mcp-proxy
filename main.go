@@ -1,14 +1,21 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/smorand/mcp-proxy/internal/config"
 	apperrors "github.com/smorand/mcp-proxy/internal/errors"
 	"github.com/smorand/mcp-proxy/internal/oauth"
+	"github.com/smorand/mcp-proxy/internal/proxy"
+	"github.com/smorand/mcp-proxy/internal/telemetry"
 	"github.com/smorand/mcp-proxy/internal/token"
 )
 
@@ -23,21 +30,87 @@ func main() {
 		apperrors.Fatal(err)
 	}
 
-	// Try to load existing token
-	tokenData, err := storage.Load(cfg.ServerURL)
-	if err == nil && !tokenData.IsExpired(time.Now()) {
-		fmt.Printf("Using cached token for %s\n", cfg.ServerURL)
-		// TODO: US-004 will implement MCP proxy using this token
-		return
+	// Initialize telemetry (JSONL trace file)
+	tracer, err := initTelemetry(storage.GetCacheDir())
+	if err != nil {
+		apperrors.Fatal(err)
+	}
+	if tracer != nil {
+		defer tracer.Close()
 	}
 
-	// Token expired: attempt refresh if we have a refresh token
-	if err == nil && tokenData.IsExpired(time.Now()) && tokenData.HasRefreshToken() {
-		fmt.Printf("Token expired, attempting refresh...\n")
+	// Obtain a valid access token (cache, refresh, or full OAuth flow)
+	accessToken, err := getValidToken(cfg, storage, tracer)
+	if err != nil {
+		apperrors.Fatal(err)
+	}
 
+	// Graceful shutdown on SIGINT/SIGTERM
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
+	// Run the MCP proxy (stdin → HTTP → stdout)
+	handler := proxy.NewHandler(proxy.HandlerConfig{
+		ServerURL:    cfg.ServerURL,
+		Storage:      storage,
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		Tracer:       tracer,
+		Stdin:        os.Stdin,
+		Stdout:       os.Stdout,
+		AccessToken:  accessToken,
+	})
+
+	if err := handler.Run(ctx); err != nil {
+		apperrors.Fatal(err)
+	}
+}
+
+// initTelemetry creates a JSONL tracer writing to ~/.cache/mcp-proxy/traces.jsonl.
+func initTelemetry(cacheDir string) (*telemetry.Tracer, error) {
+	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+		return nil, apperrors.NewFileSystemError(
+			fmt.Sprintf("Cannot create cache directory at %s", cacheDir),
+			err,
+		)
+	}
+	tracePath := filepath.Join(cacheDir, "traces.jsonl")
+	tracer, err := telemetry.NewTracer(tracePath, "mcp-proxy")
+	if err != nil {
+		return nil, apperrors.NewFileSystemError("failed to initialize telemetry", err)
+	}
+	return tracer, nil
+}
+
+// getValidToken returns a valid access token, refreshing or re-authenticating as needed.
+func getValidToken(cfg *config.Config, storage *token.Storage, tracer *telemetry.Tracer) (string, error) {
+	// Trace the token validation step
+	if tracer != nil {
+		_, span := tracer.StartSpan(context.Background(), "oauth.token_check",
+			telemetry.StringAttr("oauth.flow.step", "token_validation"),
+			telemetry.StringAttr("mcp.server.url", cfg.ServerURL),
+		)
+		defer span.End(nil)
+	}
+
+	// Try to load cached token
+	tokenData, err := storage.Load(cfg.ServerURL)
+	if err == nil && !tokenData.IsExpired(time.Now()) {
+		return tokenData.AccessToken, nil
+	}
+
+	// Token expired: attempt refresh if refresh_token is available
+	if err == nil && tokenData.IsExpired(time.Now()) && tokenData.HasRefreshToken() {
 		discovery, discErr := oauth.DiscoverEndpoints(cfg.ServerURL)
 		if discErr != nil {
-			apperrors.Fatal(discErr)
+			return "", discErr
 		}
 
 		refreshResp, refreshErr := token.RefreshAccessToken(
@@ -53,48 +126,41 @@ func main() {
 				newRefresh = tokenData.RefreshToken
 			}
 			if saveErr := storage.Save(cfg.ServerURL, refreshResp.AccessToken, newRefresh, refreshResp.ExpiresIn); saveErr != nil {
-				apperrors.Fatal(saveErr)
+				return "", saveErr
 			}
-			expirationTime := time.Now().Add(time.Duration(refreshResp.ExpiresIn) * time.Second)
-			fmt.Printf("Token refreshed successfully. Expires at: %s\n", expirationTime.Format(time.RFC3339))
-			// TODO: US-004 will implement MCP proxy using this token
-			return
+			return refreshResp.AccessToken, nil
 		}
 
 		// Refresh rejected (400/401): fall back to full OAuth flow
-		if errors.Is(refreshErr, token.ErrRefreshRejected) {
-			fmt.Printf("Refresh token rejected, starting full OAuth flow...\n")
-		} else {
-			// Network or other error during refresh
-			apperrors.Fatal(refreshErr)
+		if !errors.Is(refreshErr, token.ErrRefreshRejected) {
+			return "", refreshErr
 		}
 	}
 
-	// Full OAuth flow (first time, missing refresh token, or refresh rejected)
-	fmt.Printf("Starting OAuth flow for %s\n", cfg.ServerURL)
-	performFullOAuthFlow(cfg, storage)
+	// Full OAuth flow (first time, corrupted token, or refresh rejected)
+	return performFullOAuthFlow(cfg, storage)
 }
 
 // performFullOAuthFlow runs the complete OAuth2.1 authorization code flow with PKCE.
-func performFullOAuthFlow(cfg *config.Config, storage *token.Storage) {
+func performFullOAuthFlow(cfg *config.Config, storage *token.Storage) (string, error) {
 	discovery, err := oauth.DiscoverEndpoints(cfg.ServerURL)
 	if err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 
 	pkce, err := oauth.GeneratePKCE()
 	if err != nil {
-		apperrors.Fatal(apperrors.NewAuthError("failed to generate PKCE codes", err))
+		return "", apperrors.NewAuthError("failed to generate PKCE codes", err)
 	}
 
 	callbackServer, err := oauth.NewCallbackServer()
 	if err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 
 	redirectURI, err := callbackServer.Start()
 	if err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 	defer callbackServer.Stop()
 
@@ -105,18 +171,18 @@ func performFullOAuthFlow(cfg *config.Config, storage *token.Storage) {
 		pkce.CodeChallenge,
 	)
 
-	fmt.Printf("Opening browser for authorization...\n")
+	fmt.Fprintf(os.Stderr, "Opening browser for authorization...\n")
 	if err := oauth.OpenBrowser(authURL); err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 
-	fmt.Printf("Waiting for authorization callback...\n")
+	fmt.Fprintf(os.Stderr, "Waiting for authorization callback...\n")
 	code, err := callbackServer.WaitForCallback(5 * time.Minute)
 	if err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 
-	fmt.Printf("Exchanging authorization code for tokens...\n")
+	fmt.Fprintf(os.Stderr, "Exchanging authorization code for tokens...\n")
 	tokenResp, err := oauth.ExchangeCodeForToken(
 		discovery.TokenEndpoint,
 		cfg.ClientID,
@@ -126,19 +192,17 @@ func performFullOAuthFlow(cfg *config.Config, storage *token.Storage) {
 		pkce.CodeVerifier,
 	)
 	if err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 
 	if err := storage.Save(cfg.ServerURL, tokenResp.AccessToken, tokenResp.RefreshToken, tokenResp.ExpiresIn); err != nil {
-		apperrors.Fatal(err)
+		return "", err
 	}
 
-	expirationTime := time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
-	fmt.Printf("Token saved successfully. Expires at: %s\n", expirationTime.Format(time.RFC3339))
-	// TODO: US-004 will implement MCP proxy using this token
+	return tokenResp.AccessToken, nil
 }
 
-// buildAuthorizationURL constructs the OAuth authorization URL with PKCE
+// buildAuthorizationURL constructs the OAuth authorization URL with PKCE.
 func buildAuthorizationURL(authEndpoint, clientID, redirectURI, codeChallenge string) string {
 	params := url.Values{}
 	params.Set("client_id", clientID)
@@ -146,7 +210,5 @@ func buildAuthorizationURL(authEndpoint, clientID, redirectURI, codeChallenge st
 	params.Set("response_type", "code")
 	params.Set("code_challenge", codeChallenge)
 	params.Set("code_challenge_method", "S256")
-	// Note: scope is optional and server-dependent, not included by default
-
 	return fmt.Sprintf("%s?%s", authEndpoint, params.Encode())
 }

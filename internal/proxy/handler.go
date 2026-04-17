@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/smorand/mcp-proxy/internal/errors"
 	"github.com/smorand/mcp-proxy/internal/oauth"
@@ -150,22 +151,38 @@ func (h *Handler) handleMessage(ctx context.Context, message []byte) error {
 		}
 	}
 
-	defer result.Body.Close()
-
-	// Stream response to stdout without buffering entire body
-	if _, err := io.Copy(h.stdout, result.Body); err != nil {
+	// 202 Accepted: notification acknowledged, no response to forward
+	if result.StatusCode == http.StatusAccepted {
+		result.Body.Close()
 		if span != nil {
-			span.End(err)
+			span.End(nil)
 		}
-		return errors.NewNetworkError("failed to stream MCP response", err)
+		return nil
 	}
 
-	// Newline separator for JSON-RPC over stdio
-	if _, err := h.stdout.Write([]byte("\n")); err != nil {
-		if span != nil {
-			span.End(err)
+	if strings.Contains(result.ContentType, "text/event-stream") {
+		// SSE: extract JSON from "data:" lines and write immediately
+		if err := WriteSSEDataTo(h.stdout, result.Body); err != nil {
+			if span != nil {
+				span.End(err)
+			}
+			return errors.NewNetworkError("failed to stream MCP response", err)
 		}
-		return errors.NewNetworkError("failed to write response separator", err)
+	} else {
+		// Plain JSON: stream body and add newline separator
+		defer result.Body.Close()
+		if _, err := io.Copy(h.stdout, result.Body); err != nil {
+			if span != nil {
+				span.End(err)
+			}
+			return errors.NewNetworkError("failed to stream MCP response", err)
+		}
+		if _, err := h.stdout.Write([]byte("\n")); err != nil {
+			if span != nil {
+				span.End(err)
+			}
+			return errors.NewNetworkError("failed to write response separator", err)
+		}
 	}
 
 	if span != nil {

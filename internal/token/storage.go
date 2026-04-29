@@ -3,165 +3,144 @@ package token
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/smorand/mcp-proxy/internal/errors"
+	"github.com/smorand/mcp-proxy/internal/apperr"
 )
 
-// TokenData represents the token information stored in the cache
+const (
+	cacheDirPerm  = 0700
+	tokenFilePerm = 0600
+)
+
+// TokenData is the on-disk representation of a cached OAuth token.
 type TokenData struct {
 	AccessToken    string    `json:"access_token"`
 	RefreshToken   string    `json:"refresh_token,omitempty"`
 	ExpirationTime time.Time `json:"expiration_time"`
 }
 
-// Storage handles token file operations
+// Storage handles atomic token file operations under ~/.cache/mcp-proxy/.
 type Storage struct {
 	cacheDir string
 }
 
-// NewStorage creates a new token storage instance
+// NewStorage returns a Storage rooted at the user's cache directory.
 func NewStorage() (*Storage, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, errors.NewFileSystemError("failed to get user home directory", err)
+		return nil, apperr.NewFileSystemError("failed to get user home directory", err)
 	}
-
-	cacheDir := filepath.Join(homeDir, ".cache", "mcp-proxy")
-	return &Storage{cacheDir: cacheDir}, nil
+	return &Storage{cacheDir: filepath.Join(homeDir, ".cache", "mcp-proxy")}, nil
 }
 
-// Save saves token data to disk with proper permissions
+// CacheDir returns the absolute cache directory path.
+func (s *Storage) CacheDir() string {
+	return s.cacheDir
+}
+
+// GetCacheDir is kept for backwards compatibility.
+//
+// Deprecated: use CacheDir.
+func (s *Storage) GetCacheDir() string {
+	return s.cacheDir
+}
+
+// Save writes a token to disk atomically (temp file + rename) with 0600 perms.
 func (s *Storage) Save(serverURL string, accessToken string, refreshToken string, expiresIn int) error {
-	// Ensure cache directory exists with proper permissions
 	if err := s.ensureCacheDir(); err != nil {
 		return err
 	}
 
-	// Generate filename from server URL
-	filename := s.getTokenFilePath(serverURL)
-
-	// Compute expiration time
+	filename := s.tokenFilePath(serverURL)
 	expirationTime := time.Now().UTC().Add(time.Duration(expiresIn) * time.Second)
 
-	// Create token data
-	tokenData := TokenData{
+	// #nosec G117 -- this struct is the on-disk token record; serialising secrets is its purpose.
+	data, err := json.MarshalIndent(TokenData{
 		AccessToken:    accessToken,
 		RefreshToken:   refreshToken,
 		ExpirationTime: expirationTime,
-	}
-
-	// Marshal to JSON
-	data, err := json.MarshalIndent(tokenData, "", "  ")
+	}, "", "  ")
 	if err != nil {
-		return errors.NewFileSystemError("failed to marshal token data", err)
+		return apperr.NewFileSystemError("failed to marshal token data", err)
 	}
 
-	// Write atomically: write to temp file, then rename
 	tempFile := filename + ".tmp"
-
-	// Write to temp file with 0600 permissions
-	if err := os.WriteFile(tempFile, data, 0600); err != nil {
-		return errors.NewFileSystemError(
-			fmt.Sprintf("Cannot save tokens to %s", filename),
-			err,
-		)
+	if err := os.WriteFile(tempFile, data, tokenFilePerm); err != nil {
+		return apperr.NewFileSystemError(fmt.Sprintf("Cannot save tokens to %s", filename), err)
 	}
-
-	// Rename temp file to final filename (atomic operation)
 	if err := os.Rename(tempFile, filename); err != nil {
-		// Clean up temp file on error
-		os.Remove(tempFile)
-		return errors.NewFileSystemError(
-			fmt.Sprintf("Cannot save tokens to %s", filename),
-			err,
-		)
+		_ = os.Remove(tempFile)
+		return apperr.NewFileSystemError(fmt.Sprintf("Cannot save tokens to %s", filename), err)
 	}
-
 	return nil
 }
 
-// Load loads token data from disk
+// Load reads and validates a token file. Returns apperr.ErrTokenFileNotFound
+// (wrapped) when no file exists, apperr.ErrInvalidTokenFormat when the file
+// cannot be parsed, and apperr.ErrTokenMissingField when required fields
+// are absent.
 func (s *Storage) Load(serverURL string) (*TokenData, error) {
-	filename := s.getTokenFilePath(serverURL)
+	filename := s.tokenFilePath(serverURL)
 
-	// Read file
+	// #nosec G304 -- filename is derived from a base64-encoded server URL within the user's cache dir.
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("token file not found")
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, apperr.ErrTokenFileNotFound
 		}
-		return nil, errors.NewFileSystemError("failed to read token file", err)
+		return nil, apperr.NewFileSystemError("failed to read token file", err)
 	}
 
-	// Parse JSON
 	var tokenData TokenData
 	if err := json.Unmarshal(data, &tokenData); err != nil {
-		return nil, fmt.Errorf("invalid token file format")
+		return nil, apperr.ErrInvalidTokenFormat
 	}
 
-	// Validate required fields
 	if tokenData.AccessToken == "" {
-		return nil, fmt.Errorf("token file missing access_token")
+		return nil, fmt.Errorf("%w: access_token", apperr.ErrTokenMissingField)
 	}
 	if tokenData.ExpirationTime.IsZero() {
-		return nil, fmt.Errorf("token file missing expiration_time")
+		return nil, fmt.Errorf("%w: expiration_time", apperr.ErrTokenMissingField)
 	}
 
 	return &tokenData, nil
 }
 
-// ensureCacheDir creates the cache directory if it doesn't exist
 func (s *Storage) ensureCacheDir() error {
-	// Check if directory exists
 	info, err := os.Stat(s.cacheDir)
 	if err == nil {
-		// Directory exists, check if it's actually a directory
 		if !info.IsDir() {
-			return errors.NewFileSystemError(
+			return apperr.NewFileSystemError(
 				fmt.Sprintf("Cannot create token cache directory at %s: path exists but is not a directory", s.cacheDir),
 				nil,
 			)
 		}
 		return nil
 	}
-
-	// Directory doesn't exist, create it
-	if os.IsNotExist(err) {
-		if err := os.MkdirAll(s.cacheDir, 0700); err != nil {
-			return errors.NewFileSystemError(
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(s.cacheDir, cacheDirPerm); err != nil {
+			return apperr.NewFileSystemError(
 				fmt.Sprintf("Cannot create token cache directory at %s", s.cacheDir),
 				err,
 			)
 		}
 		return nil
 	}
-
-	// Other error
-	return errors.NewFileSystemError(
+	return apperr.NewFileSystemError(
 		fmt.Sprintf("Cannot create token cache directory at %s", s.cacheDir),
 		err,
 	)
 }
 
-// getTokenFilePath generates the token file path for a given server URL
-func (s *Storage) getTokenFilePath(serverURL string) string {
-	// Base64url encode the URL (RFC 4648, URL-safe alphabet, no padding)
+func (s *Storage) tokenFilePath(serverURL string) string {
 	encoded := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString([]byte(serverURL))
-
-	// Replace any remaining problematic characters
 	encoded = strings.ReplaceAll(encoded, "/", "_")
 	encoded = strings.ReplaceAll(encoded, "+", "-")
-
-	filename := encoded + ".json"
-	return filepath.Join(s.cacheDir, filename)
-}
-
-// GetCacheDir returns the cache directory path (for testing)
-func (s *Storage) GetCacheDir() string {
-	return s.cacheDir
+	return filepath.Join(s.cacheDir, encoded+".json")
 }

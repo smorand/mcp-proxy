@@ -1,0 +1,15 @@
+# Docker Compose configuration for mcp-proxy.
+# Build images with: make docker-build
+# Start with: make run-up
+# Stop with: make run-down
+
+services:
+  mcp-proxy:
+    image: ${DOCKER_PREFIX:-}${PROJECT_NAME:-mcp-proxy}-mcp-proxy:${DOCKER_TAG:-latest}
+    restart: unless-stopped
+    # mcp-proxy is a stdio CLI; running it under docker compose is mostly
+    # useful for build verification. Provide credentials via env when invoked
+    # interactively (e.g. docker run -i ...).
+    # environment:
+    #   - GOOGLE_CLIENT_ID=
+    #   - GOOGLE_CLIENT_SECRET=

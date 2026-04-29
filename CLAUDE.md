@@ -1,117 +1,62 @@
 # mcp-proxy — AI Development Guide
 
-## Project Overview
+## Overview
 
-**mcp-proxy** is a Go-based CLI tool that acts as an authentication proxy for MCP (Model Context Protocol) servers. It exposes a local stdio interface, forwarding JSON-RPC messages to remote MCP servers via streamable HTTP with OAuth2.1 authentication, automatic token refresh, and JSONL tracing.
+CLI authenticating proxy between a local stdio MCP client and a remote MCP server (HTTPS, OAuth2.1 + PKCE, JSONL OpenTelemetry tracing).
 
-**Tech Stack:**
-- Language: Go 1.21+
-- CLI: Standard library `flag` package
-- HTTP: Standard library `net/http` with streaming
-- Tracing: Custom JSONL exporter (no external SDK)
-- Testing: Go testing framework with table-driven tests
-- Build: Makefile
+**Tech Stack:** Go 1.26+, OpenTelemetry SDK, standard library `net/http`, `log/slog`, `flag`.
 
 ## Key Commands
 
 ```bash
-# Build
-make build
-
-# Test
-make test
-
-# Format code
-make format
-
-# Run all quality checks
-make check
-
-# Clean artifacts
-make clean
+make build                    # Build for current platform → bin/
+make run CMD=mcp-proxy ARGS='--url https://...'
+make test-unit                # Go unit tests
+make test-race                # Race-detector tests
+make fmt                      # go fmt
+make lint                     # golangci-lint (falls back to go vet)
+make check                    # fmt + vet + lint + tests
+make clean                    # Remove bin/
 ```
 
 ## Project Structure
 
 ```
 mcp-proxy/
-├── main.go                    # Entry point, token acquisition, proxy startup
+├── cmd/mcp-proxy/main.go     # Entry point (wiring only)
 ├── internal/
-│   ├── config/               # CLI parsing & validation
-│   ├── token/                # Token file I/O, expiration & refresh
-│   │   ├── storage.go        # Token persistence (atomic writes)
-│   │   ├── expiration.go     # Expiration detection
-│   │   └── refresh.go        # Token refresh via refresh_token
-│   ├── oauth/                # OAuth2.1 flow components
-│   │   ├── pkce.go          # PKCE code generation
-│   │   ├── discovery.go     # .well-known endpoint discovery
-│   │   ├── callback.go      # HTTP callback server
-│   │   ├── browser.go       # Browser integration
-│   │   └── exchange.go      # Token exchange
-│   ├── proxy/                # MCP proxy (stdio <-> HTTP)
-│   │   ├── stdio.go         # stdin/stdout JSON-RPC scanning
-│   │   ├── http.go          # HTTP client with Bearer auth
-│   │   └── handler.go       # Proxy orchestration, 401 retry
-│   ├── telemetry/            # JSONL tracing (no external SDK)
-│   │   ├── tracer.go        # Span creation & lifecycle
-│   │   └── exporter.go      # File-based JSONL exporter
-│   └── errors/               # Error types & exit codes
-├── tests/                    # E2E tests
-├── user-stories/             # Implementation backlog
-└── specs/                    # Specifications
+│   ├── app/                  # Run() orchestration
+│   ├── apperr/               # Typed errors, sentinels, exit codes
+│   ├── config/               # Flag/env parsing
+│   ├── oauth/                # PKCE, discovery, exchange, callback, browser
+│   ├── proxy/                # stdio + HTTP, handler, SSE
+│   ├── telemetry/            # OpenTelemetry SDK + JSONL stdout exporter
+│   └── token/                # Atomic storage, refresh, expiration
+├── Dockerfile                # Multi-stage scratch image
+├── docker-compose.yml
+├── .golangci.yml
+└── .agent_docs/              # Loaded on demand
 ```
 
 ## Essential Conventions
 
-### Error Handling
-- All errors start with "Error: "
-- Use specific exit codes (1-5):
-  - 1: Configuration error
-  - 2: Authentication error
-  - 3: Network error
-  - 4: File system error
-  - 5: Token error
-- Never include sensitive data in error messages
-
-### Configuration
-- Support both CLI flags and environment variables
-- Use "env:" prefix for environment variable references
-- Default credentials: `env:GOOGLE_CLIENT_ID`, `env:GOOGLE_CLIENT_SECRET`
-
-### Token Storage
-- Location: `~/.cache/mcp-proxy/{base64url(server_url)}.json`
-- Directory permissions: 0700
-- File permissions: 0600
-- Atomic writes: temp file + rename
-- Always read from disk (no in-memory caching)
-
-### Testing
-- Table-driven tests
-- E2E tests run the actual binary
-- Test IDs match spec (E2E-XXX)
-- Comprehensive edge case coverage
+- **HTTP clients are injected.** No package-level `http.Client`; pass `*http.Client` so tests use `httptest.Server.Client()` and prod uses TLS-verified defaults.
+- **All HTTP requests use `http.NewRequestWithContext`.**
+- **Error types** in `internal/apperr` (`AppError` with `Unwrap()`, exit codes 1-5, sentinels `ErrTokenFileNotFound`, `ErrInvalidTokenFormat`, `ErrTokenMissingField`).
+- **Logging** uses `log/slog` (`slog.SetDefault` in `app.Run`). Never log tokens, secrets, prompts.
+- **Telemetry** uses `internal/telemetry` (OTel wrapper). Spans: `oauth.token_check`, `oauth.token_refresh`, `http.forward`. Trace file: `~/.cache/mcp-proxy/traces.jsonl` (0600).
+- **Magic numbers are constants** at the top of each file (port range, timeouts, file perms, PKCE entropy).
+- **Token files**: `~/.cache/mcp-proxy/{base64url(server_url)}.json` with 0600 perms; dir 0700; atomic writes (temp + rename).
+- **Tests live next to packages** as `*_test.go` in external `package _test` form.
 
 ## Documentation Index
 
-- **README.md**: User-facing documentation
-- **user-stories/**: Implementation backlog (US-001 through US-004)
-- **specs/**: Technical specifications
+- `.agent_docs/golang.md` — Go coding conventions
+- `.agent_docs/makefile.md` — Makefile target reference
+- `README.md` — User-facing documentation
+- `user-stories/` — Implementation backlog (US-001…US-004)
+- `specs/` — Specifications
 
-## Current Status
+## Status
 
-**Implemented:** US-001 (Foundation) + US-002 (OAuth2.1 Flow) + US-003 (Token Refresh) + US-004 (MCP Proxy Streaming)
-- ✅ CLI argument parsing
-- ✅ Token file management
-- ✅ Error handling framework
-- ✅ OAuth2.1 discovery via .well-known
-- ✅ PKCE code generation (SHA256)
-- ✅ HTTP callback server (ports 3000-3010)
-- ✅ Browser integration (macOS/Linux/Windows)
-- ✅ Token exchange and caching
-- ✅ Token expiration detection
-- ✅ Automatic token refresh via refresh_token
-- ✅ Fallback to full OAuth when refresh fails (400/401)
-- ✅ stdio proxy: read JSON-RPC from stdin, forward via HTTP, write to stdout
-- ✅ 401 handling: auto-refresh token and retry once
-- ✅ OpenTelemetry JSONL tracing at `~/.cache/mcp-proxy/traces.jsonl`
-- ✅ Graceful shutdown on SIGINT/SIGTERM
+US-001 + US-002 + US-003 + US-004 implemented. OAuth2.1 with PKCE, token refresh + automatic 401 retry, stdio↔HTTP streaming, OpenTelemetry tracing, graceful shutdown.

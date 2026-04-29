@@ -1,80 +1,71 @@
 package oauth
 
 import (
-	"crypto/tls"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
-	"github.com/smorand/mcp-proxy/internal/errors"
+	"github.com/smorand/mcp-proxy/internal/apperr"
 )
 
-// OAuthDiscovery represents the OAuth 2.1 discovery document
-type OAuthDiscovery struct {
+// Discovery represents the OAuth 2.1 authorization server metadata.
+type Discovery struct {
 	AuthorizationEndpoint string `json:"authorization_endpoint"`
 	TokenEndpoint         string `json:"token_endpoint"`
 	Issuer                string `json:"issuer"`
 }
 
-// DiscoverEndpoints fetches the OAuth 2.1 discovery document from the MCP server
-// It looks for .well-known/oauth-authorization-server at the server URL
-func DiscoverEndpoints(serverURL string) (*OAuthDiscovery, error) {
-	// Parse the server URL
+// DiscoverEndpoints fetches the OAuth 2.1 authorization server metadata
+// from `<server>/.well-known/oauth-authorization-server`. The provided
+// HTTP client is used for the request; pass http.DefaultClient unless TLS
+// behaviour needs to be customised (e.g. tests against httptest TLS servers).
+func DiscoverEndpoints(ctx context.Context, serverURL string, client *http.Client) (*Discovery, error) {
 	parsedURL, err := url.Parse(serverURL)
 	if err != nil {
-		return nil, errors.NewConfigError("invalid server URL", err)
+		return nil, apperr.NewConfigError("invalid server URL", err)
 	}
 
-	// Construct the discovery URL
 	discoveryURL := fmt.Sprintf("%s://%s/.well-known/oauth-authorization-server", parsedURL.Scheme, parsedURL.Host)
 
-	// Create HTTP client with timeout and TLS config for testing
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
+	if err != nil {
+		return nil, apperr.NewNetworkError("failed to create OAuth discovery request", err)
 	}
 
-	// Fetch the discovery document
-	resp, err := client.Get(discoveryURL)
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, errors.NewNetworkError(
+		return nil, apperr.NewNetworkError(
 			fmt.Sprintf("failed to fetch OAuth discovery document from %s", discoveryURL),
 			err,
 		)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	// Check status code
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.NewNetworkError(
+		return nil, apperr.NewNetworkError(
 			fmt.Sprintf("OAuth discovery endpoint returned status %d", resp.StatusCode),
 			nil,
 		)
 	}
 
-	// Read response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.NewNetworkError("failed to read OAuth discovery response", err)
+		return nil, apperr.NewNetworkError("failed to read OAuth discovery response", err)
 	}
 
-	// Parse JSON
-	var discovery OAuthDiscovery
+	var discovery Discovery
 	if err := json.Unmarshal(body, &discovery); err != nil {
-		return nil, errors.NewNetworkError("failed to parse OAuth discovery document", err)
+		return nil, apperr.NewNetworkError("failed to parse OAuth discovery document", err)
 	}
 
-	// Validate required fields
 	if discovery.AuthorizationEndpoint == "" {
-		return nil, errors.NewNetworkError("OAuth discovery document missing authorization_endpoint", nil)
+		return nil, apperr.NewNetworkError("OAuth discovery document missing authorization_endpoint", nil)
 	}
 	if discovery.TokenEndpoint == "" {
-		return nil, errors.NewNetworkError("OAuth discovery document missing token_endpoint", nil)
+		return nil, apperr.NewNetworkError("OAuth discovery document missing token_endpoint", nil)
 	}
 
 	return &discovery, nil

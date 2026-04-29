@@ -4,15 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/smorand/mcp-proxy/internal/errors"
+	"github.com/smorand/mcp-proxy/internal/apperr"
 )
+
+const defaultMCPClientTimeout = 30 * time.Second
 
 // MCPClient handles HTTP communication with a remote MCP server.
 type MCPClient struct {
@@ -21,17 +22,14 @@ type MCPClient struct {
 	httpClient *http.Client
 }
 
-// NewMCPClient creates an HTTP client configured for the given MCP server URL.
-func NewMCPClient(serverURL string) *MCPClient {
-	return &MCPClient{
-		serverURL: serverURL,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			},
-		},
+// NewMCPClient creates an HTTP client configured for the given MCP server
+// URL. Pass a non-nil *http.Client to control TLS / timeouts; nil falls
+// back to a sensible default.
+func NewMCPClient(serverURL string, client *http.Client) *MCPClient {
+	if client == nil {
+		client = &http.Client{Timeout: defaultMCPClientTimeout}
 	}
+	return &MCPClient{serverURL: serverURL, httpClient: client}
 }
 
 // ForwardResult contains the MCP server HTTP response.
@@ -45,9 +43,9 @@ type ForwardResult struct {
 // Forward sends a JSON-RPC message to the MCP server with Bearer token auth.
 // The caller is responsible for closing Body in the returned ForwardResult.
 func (c *MCPClient) Forward(ctx context.Context, message []byte, accessToken string) (*ForwardResult, error) {
-	req, err := http.NewRequestWithContext(ctx, "POST", c.serverURL, bytes.NewReader(message))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.serverURL, bytes.NewReader(message))
 	if err != nil {
-		return nil, errors.NewNetworkError("failed to create MCP request", err)
+		return nil, apperr.NewNetworkError("failed to create MCP request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -59,7 +57,7 @@ func (c *MCPClient) Forward(ctx context.Context, message []byte, accessToken str
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, errors.NewNetworkError(
+		return nil, apperr.NewNetworkError(
 			fmt.Sprintf("Failed to connect to MCP server: %v", err),
 			err,
 		)
@@ -87,18 +85,16 @@ func WriteSSEDataTo(w io.Writer, body io.ReadCloser) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "data: ") {
-			data := line[6:]
+			data := line[len("data: "):]
 			if _, err := w.Write([]byte(data + "\n")); err != nil {
-				body.Close()
+				_ = body.Close()
 				return err
 			}
 			wrote = true
 		} else if wrote && line == "" {
-			// Empty line after data = end of SSE event; stop reading
 			break
 		}
 	}
-	// Close body in background to avoid blocking on chunked streams
-	go body.Close()
+	go func() { _ = body.Close() }()
 	return scanner.Err()
 }

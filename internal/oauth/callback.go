@@ -7,46 +7,56 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/smorand/mcp-proxy/internal/errors"
+	"github.com/smorand/mcp-proxy/internal/apperr"
 )
 
-// CallbackResult holds the result of the OAuth callback
+const (
+	callbackPortStart    = 3000
+	callbackPortEnd      = 3010
+	callbackReadTimeout  = 10 * time.Second
+	callbackWriteTimeout = 10 * time.Second
+	callbackStartDelay   = 100 * time.Millisecond
+	callbackShutdown     = 5 * time.Second
+)
+
+// CallbackResult holds either the authorization code or the error returned
+// by the OAuth provider on the redirect URI.
 type CallbackResult struct {
 	Code  string
 	Error string
 }
 
-// CallbackServer manages the temporary HTTP server for OAuth callbacks
+// CallbackServer is a single-shot localhost HTTP server that captures the
+// OAuth authorization code via the redirect URI.
 type CallbackServer struct {
 	server   *http.Server
 	port     int
 	resultCh chan CallbackResult
 }
 
-// NewCallbackServer creates a new callback server
-// It tries ports 3000-3010 until it finds an available one
+// NewCallbackServer reserves an available local port in the configured
+// range and returns a server ready to be started.
 func NewCallbackServer() (*CallbackServer, error) {
-	// Try ports 3000-3010
-	for port := 3000; port <= 3010; port++ {
-		// Try to listen on the port to verify it's available
+	for port := callbackPortStart; port <= callbackPortEnd; port++ {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
 		listener, err := net.Listen("tcp", addr)
 		if err != nil {
-			continue // Port in use, try next
+			continue
 		}
-		// Close immediately, we'll reopen when starting
-		listener.Close()
-
+		_ = listener.Close()
 		return &CallbackServer{
 			port:     port,
 			resultCh: make(chan CallbackResult, 1),
 		}, nil
 	}
-
-	return nil, errors.NewNetworkError("no available ports in range 3000-3010", nil)
+	return nil, apperr.NewNetworkError(
+		fmt.Sprintf("no available ports in range %d-%d", callbackPortStart, callbackPortEnd),
+		nil,
+	)
 }
 
-// Start starts the HTTP server and returns the redirect URI
+// Start launches the HTTP server in the background and returns the
+// redirect URI to use in the authorization request.
 func (s *CallbackServer) Start() (string, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/oauth2callback", s.handleCallback)
@@ -54,26 +64,49 @@ func (s *CallbackServer) Start() (string, error) {
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf("127.0.0.1:%d", s.port),
 		Handler:      mux,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  callbackReadTimeout,
+		WriteTimeout: callbackWriteTimeout,
 	}
 
-	// Start server in background
 	go func() {
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			s.resultCh <- CallbackResult{Error: fmt.Sprintf("HTTP server error: %v", err)}
 		}
 	}()
 
-	// Give server time to start
-	time.Sleep(100 * time.Millisecond)
-
+	time.Sleep(callbackStartDelay)
 	return fmt.Sprintf("http://localhost:%d/oauth2callback", s.port), nil
 }
 
-// handleCallback handles the OAuth callback request
+// WaitForCallback waits for the OAuth callback or the given timeout.
+func (s *CallbackServer) WaitForCallback(timeout time.Duration) (string, error) {
+	select {
+	case result := <-s.resultCh:
+		if result.Error != "" {
+			return "", apperr.NewAuthError(fmt.Sprintf("OAuth callback error: %s", result.Error), nil)
+		}
+		return result.Code, nil
+	case <-time.After(timeout):
+		return "", apperr.NewAuthError("OAuth flow timed out. User did not complete authentication.", nil)
+	}
+}
+
+// Stop gracefully shuts down the HTTP server.
+func (s *CallbackServer) Stop() error {
+	if s.server == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), callbackShutdown)
+	defer cancel()
+	return s.server.Shutdown(ctx)
+}
+
+// Port returns the bound TCP port.
+func (s *CallbackServer) Port() int {
+	return s.port
+}
+
 func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) {
-	// Extract authorization code or error from query parameters
 	code := r.URL.Query().Get("code")
 	errorParam := r.URL.Query().Get("error")
 
@@ -83,50 +116,21 @@ func (s *CallbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 			errorParam = fmt.Sprintf("%s: %s", errorParam, errorDesc)
 		}
 		s.resultCh <- CallbackResult{Error: errorParam}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "OAuth error: %s", errorParam)
+		// errorParam is echoed back as plain text only; no HTML interpretation.
+		_, _ = w.Write([]byte("OAuth error: " + errorParam)) // #nosec G705 -- Content-Type forced to text/plain above.
 		return
 	}
 
 	if code == "" {
 		s.resultCh <- CallbackResult{Error: "no authorization code received"}
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprint(w, "Error: No authorization code received")
+		_, _ = fmt.Fprint(w, "Error: No authorization code received")
 		return
 	}
 
-	// Send success response
 	s.resultCh <- CallbackResult{Code: code}
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "Authorization successful! You can close this window.")
-}
-
-// WaitForCallback waits for the OAuth callback with a timeout
-func (s *CallbackServer) WaitForCallback(timeout time.Duration) (string, error) {
-	select {
-	case result := <-s.resultCh:
-		if result.Error != "" {
-			return "", errors.NewAuthError(fmt.Sprintf("OAuth callback error: %s", result.Error), nil)
-		}
-		return result.Code, nil
-	case <-time.After(timeout):
-		return "", errors.NewAuthError("OAuth flow timed out. User did not complete authentication.", nil)
-	}
-}
-
-// Stop stops the HTTP server
-func (s *CallbackServer) Stop() error {
-	if s.server == nil {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return s.server.Shutdown(ctx)
-}
-
-// Port returns the port the server is listening on
-func (s *CallbackServer) Port() int {
-	return s.port
+	_, _ = fmt.Fprint(w, "Authorization successful! You can close this window.")
 }
